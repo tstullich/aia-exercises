@@ -17,7 +17,12 @@ Mat Aia1::doSomethingThatMyTutorIsGonnaLike(Mat& img) {
     Mat outputImg = img.clone();
     for (int i = 0; i < img.rows; i++) {
         for (int j = 0; j < img.cols; j++) {
-            outputImg.at<Vec3b>(i, j)[0] = 255;
+            Vec3b pixel = outputImg.at<Vec3b>(i, j);
+            uchar temp = pixel[0];
+            pixel[0] = pixel[1];
+            pixel[1] = pixel[2];
+            pixel[2] = temp;
+            outputImg.at<Vec3b>(i, j) = pixel;
         }
     }
     return outputImg;
