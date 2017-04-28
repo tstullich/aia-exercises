@@ -6,6 +6,7 @@
 // Description : 
 //============================================================================
 
+#include <stdlib.h>
 #include "Aia1.h"
 
 // function that performs some kind of (simple) image processing
@@ -13,11 +14,14 @@
 img	input image
 return	output image
 */
-Mat Aia1::doSomethingThatMyTutorIsGonnaLike(Mat& img){
-  
-	// TO DO !!!
-	return img;
-
+Mat Aia1::doSomethingThatMyTutorIsGonnaLike(Mat& img) {
+    Mat outputImg = img.clone();
+    for (int i = 0; i < img.rows; i++) {
+        for (int j = 0; j < img.cols; j++) {
+            outputImg.at<Vec3b>(i, j)[0] = 255;
+        }
+    }
+	return outputImg;
 }
 
 /* *****************************
