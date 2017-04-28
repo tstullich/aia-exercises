@@ -20,7 +20,7 @@ Mat Aia1::doSomethingThatMyTutorIsGonnaLike(Mat& img) {
             outputImg.at<Vec3b>(i, j)[0] = 255;
         }
     }
-	return outputImg;
+    return outputImg;
 }
 
 /* *****************************
