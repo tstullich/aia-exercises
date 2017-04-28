@@ -6,7 +6,6 @@
 // Description : 
 //============================================================================
 
-#include <stdlib.h>
 #include "Aia1.h"
 
 // function that performs some kind of (simple) image processing
