@@ -16,8 +16,14 @@ thresh		threshold used to binarize the image
 k			number of applications of the erosion operator
 */
 void Aia2::getContourLine(const Mat& img, vector<Mat>& objList, int thresh, int k){
+    Mat dst(img.cols, img.rows, CV_8UC1);
+    cv::threshold(img, dst, thresh, 255, THRESH_BINARY_INV);
 
-    // TO DO !!!
+    while (k-- > 0) {
+        cv::erode(dst, dst, Mat());
+    }
+
+    cv::findContours(dst, objList, CV_RETR_EXTERNAL, CV_CHAIN_APPROX_NONE);
 }
 
 // calculates the (unnormalized!) fourier descriptor from a list of points
