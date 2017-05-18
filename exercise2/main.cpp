@@ -37,7 +37,7 @@ int main(int argc, char** argv) {
 	Aia2 aia2;
 
 	// run some test routines
-	aia2.test();
+	//aia2.test();
 
 	// start processing
 	aia2.run(img, tmpl1, tmpl2);

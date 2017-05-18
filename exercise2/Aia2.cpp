@@ -16,14 +16,10 @@ thresh		threshold used to binarize the image
 k			number of applications of the erosion operator
 */
 void Aia2::getContourLine(const Mat& img, vector<Mat>& objList, int thresh, int k){
-    Mat dst(img.cols, img.rows, CV_8UC1);
-    cv::threshold(img, dst, thresh, 255, THRESH_BINARY_INV);
-
-    while (k-- > 0) {
-        cv::erode(dst, dst, Mat());
-    }
-
-    cv::findContours(dst, objList, CV_RETR_EXTERNAL, CV_CHAIN_APPROX_NONE);
+  Mat dst;
+  threshold(img, dst, thresh, 255, THRESH_BINARY_INV);
+  erode(dst, dst, Mat(), Point(-1,-1), k);
+  findContours(dst, objList, CV_RETR_EXTERNAL, CV_CHAIN_APPROX_NONE);  
 }
 
 // calculates the (unnormalized!) fourier descriptor from a list of points
@@ -32,11 +28,10 @@ contour		1xN 2-channel matrix, containing N points (x in first, y in second chan
 out		fourier descriptor (not normalized)
 */
 Mat Aia2::makeFD(const Mat& contour){
- 
-    // TO DO !!!
-
-    return contour;
-
+  Mat src, dst;
+  contour.convertTo(src, CV_32F);
+  dft(src, dst);
+  return dst;
 }
 
 // normalize a given fourier descriptor
@@ -46,26 +41,34 @@ n		number of used frequencies (should be even)
 out		the normalized fourier descriptor
 */
 Mat Aia2::normFD(const Mat& fd, int n){
-   
-  //plotFD(<???>, "fd not normalized", 0);
+  Mat fdc = fd.clone();
+
+  plotFD(fdc, "fd not normalized", 0);
   
-  // translation invariance
-  // TO DO !!!
-  //plotFD(<???>, "fd translation invariant", 0);
+  // translation invariance: set F[0] to zero
+  fdc.at<Vec2f>(0) = Vec2f(0,0);
+  plotFD(fdc, "fd translation invariant", 0);
   
-  // scale invariance
-  // TO DO !!!
-  //plotFD(<???>, "fd translation and scale invariant", 0);
+  // scale invariance: divide by magnitude of F[1]
+  // TODO: magnitude of F[1] is zero (and magnitude of F[1] is zero or almost zero))
+  float mag_f1 = sqrt(pow(fdc.at<Vec2f>(1)[0],2) + pow(fdc.at<Vec2f>(1)[1],2)); 
+  fdc /= mag_f1;
+  plotFD(fdc, "fd translation and scale invariant", 0);
   
-  // rotation invariance
-  // TO DO !!!
-  //plotFD(<???>, "fd translation, scale, and rotation invariant", 0);
+  // rotation invariance: set F[i] := magnitude(F[i])
+  Mat planes[2];
+  split(fdc, planes);
+  cartToPolar(planes[0], planes[1], planes[0], planes[1]);
+  plotFD(planes[0], "fd translation, scale, and rotation invariant", 0);
   
   // smaller sensitivity for details
-  // TO DO !!!
-  //plotFD(<???>, "fd translation, scale, and rotation invariant, smaller sensitivity", 0);
+  // TODO how exactly? retain the largest ones?
+  // wrt negative/positive/frequency: the corresponding angles are in planes[1]
+  Mat nfd;
+  nfd = planes[0](Rect(0,0,1,n));
+  plotFD(nfd, "fd translation, scale, and rotation invariant, smaller sensitivity", 0);
 
-  return fd;
+  return nfd;
 }
 
 // plot fourier descriptor
@@ -75,9 +78,48 @@ win	the window name
 dur	wait number of ms or until key is pressed
 */
 void Aia2::plotFD(const Mat& fd, string win, double dur){
+  
+  // if fd is 1 channel, add second channel
+  Mat fd_2c = fd;
+  if (fd.channels() == 1) {
+    vector<Mat> chnls;
+    Mat secchan = Mat::zeros(fd.size(), CV_32F);
+    chnls.push_back(fd);
+    chnls.push_back(secchan);
+    merge(chnls, fd_2c);
+  }
 
-   // TO DO !!!
-    
+  // retrieve pixel coordinates
+  Mat pc;
+  dft(fd_2c, pc, DFT_INVERSE);
+
+  // shift to non-negative coordinates
+  double min_x, max_x, min_y, max_y;  
+  Mat planes[2];
+  split(pc, planes);
+  minMaxIdx(planes[0], &min_x, &max_x, NULL, NULL);
+  minMaxIdx(planes[1], &min_y, &max_y, NULL, NULL); 
+  pc -= Vec2f(min_x, min_y);
+  max_x -= min_x;
+  max_y -= min_y;
+
+  // rescale to fit into 200x200 image
+  pc /= max(max_x, max_y);
+  pc *= 199;
+
+  // initialize black image
+  Mat img = Mat(200, 200, CV_8UC1, Scalar(0));
+
+  // set pixel coordinates to white
+  for (int i=0; i<pc.rows; i++) {
+    Vec2f coordinates = pc.at<Vec2f>(i);
+    int x = round(coordinates[0]);
+    int y = round(coordinates[1]);
+    img.at<uchar>(x,y) = 255;      
+  }
+
+  // show image
+  //showImage(img, win, dur);
 }
 
 /* *****************************
@@ -105,7 +147,7 @@ void Aia2::run(string img, string template1, string template2){
 	}
 
 	// parameters
-	// these two will be adjusted below for each image indiviudally
+	// these two will be adjusted below for each image individually
 	int binThreshold;				// threshold for image binarization
 	int numOfErosions;				// number of applications of the erosion operator
 	// these two values work fine, but might be interesting for you to play around with them
@@ -117,7 +159,7 @@ void Aia2::run(string img, string template1, string template2){
 	vector<Mat> contourLines2;
 	// TO DO !!!
 	// --> Adjust threshold and number of erosion operations
-	binThreshold = 0;
+	binThreshold = 130;
 	numOfErosions = 1;
 	getContourLine(exC1, contourLines1, binThreshold, numOfErosions);
 	int mSize = 0, mc1 = 0, mc2 = 0, i = 0;
@@ -156,8 +198,8 @@ void Aia2::run(string img, string template1, string template2){
 	vector<Mat> contourLines;
 	// TO DO !!!
 	// --> Adjust threshold and number of erosion operations
-	binThreshold = 0;
-	numOfErosions = 1;
+	binThreshold = 130;
+	numOfErosions = 2;
 	getContourLine(query, contourLines, binThreshold, numOfErosions);
 	
 	cout << "Found " << contourLines.size() << " object candidates" << endl;
@@ -181,7 +223,7 @@ void Aia2::run(string img, string template1, string template2){
 	    for(int p=0; p < c->rows; p++){
 			result.at<Vec3b>(c->at<Vec2i>(p)[1], c->at<Vec2i>(p)[0]) = col;
 	    }
-	    showImage(result, "result", 0);
+	    //showImage(result, "result", 0);
 	    
 	    // if fourier descriptor has too few components (too small contour), then skip it (and color it in blue)
 	    if (c->rows < steps){
@@ -215,7 +257,7 @@ void Aia2::run(string img, string template1, string template2){
 			result.at<Vec3b>(c->at<Vec2i>(p)[1], c->at<Vec2i>(p)[0]) = col;
 	    }
 	    // for intermediate results, use the following line
-	    showImage(result, "result", 0);
+	    //showImage(result, "result", 0);
 
 	}
 	// save result
@@ -246,7 +288,6 @@ void Aia2::showImage(const Mat& img, string win, double dur){
 // function loads input image and calls processing function
 // output is tested on "correctness" 
 void Aia2::test(void){
-	
 	test_getContourLine();
 	test_makeFD();
 	test_normFD();
@@ -266,7 +307,7 @@ void Aia2::test_getContourLine(void){
 	for(int i=41; i<58; i++) cline.at<Vec2i>(k++) = Vec2i(i,58);
 	for(int i=58; i>41; i--) cline.at<Vec2i>(k++) = Vec2i(58, i);
 	for(int i=58; i>41; i--) cline.at<Vec2i>(k++) = Vec2i(i,41);
-	if ( sum(cline != objList.at(0)).val[0] != 0 ){
+  if ( sum(cline != objList.at(0)).val[0] != 0 ){
 		cout << "There might be a problem with Aia2::getContourLine(..)!" << endl;
 		cin.get();
 	}
