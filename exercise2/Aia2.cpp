@@ -43,30 +43,31 @@ out		the normalized fourier descriptor
 Mat Aia2::normFD(const Mat& fd, int n){
   Mat fdc = fd.clone();
 
-  plotFD(fdc, "fd not normalized", 0);
+  //plotFD(fdc, "fd not normalized", 0);
   
   // translation invariance: set F[0] to zero
   fdc.at<Vec2f>(0) = Vec2f(0,0);
-  plotFD(fdc, "fd translation invariant", 0);
+  //plotFD(fdc, "fd translation invariant", 0);
   
   // scale invariance: divide by magnitude of F[1]
   // TODO: magnitude of F[1] is zero (and magnitude of F[1] is zero or almost zero))
   float mag_f1 = sqrt(pow(fdc.at<Vec2f>(1)[0],2) + pow(fdc.at<Vec2f>(1)[1],2)); 
   fdc /= mag_f1;
-  plotFD(fdc, "fd translation and scale invariant", 0);
+  //plotFD(fdc, "fd translation and scale invariant", 0);
   
   // rotation invariance: set F[i] := magnitude(F[i])
   Mat planes[2];
   split(fdc, planes);
   cartToPolar(planes[0], planes[1], planes[0], planes[1]);
-  plotFD(planes[0], "fd translation, scale, and rotation invariant", 0);
+  //plotFD(planes[0], "fd translation, scale, and rotation invariant", 0);
   
   // smaller sensitivity for details
-  // TODO how exactly? retain the largest ones?
   // wrt negative/positive/frequency: the corresponding angles are in planes[1]
+  // I just used a blur filter to try and remove higher frequencies
   Mat nfd;
-  nfd = planes[0](Rect(0,0,1,n));
-  plotFD(nfd, "fd translation, scale, and rotation invariant, smaller sensitivity", 0);
+  cv::blur(planes[0], planes[0], Point(4,4));
+  nfd = planes[0](Rect(0, 0, 1, n));
+  //plotFD(nfd, "fd translation, scale, and rotation invariant, smaller sensitivity", 0);
 
   return nfd;
 }
@@ -119,7 +120,7 @@ void Aia2::plotFD(const Mat& fd, string win, double dur){
   }
 
   // show image
-  //showImage(img, win, dur);
+  // showImage(img, win, dur);
 }
 
 /* *****************************
@@ -159,8 +160,8 @@ void Aia2::run(string img, string template1, string template2){
 	vector<Mat> contourLines2;
 	// TO DO !!!
 	// --> Adjust threshold and number of erosion operations
-	binThreshold = 130;
-	numOfErosions = 1;
+	binThreshold = 110;
+	numOfErosions = 2;
 	getContourLine(exC1, contourLines1, binThreshold, numOfErosions);
 	int mSize = 0, mc1 = 0, mc2 = 0, i = 0;
 	for(vector<Mat>::iterator c = contourLines1.begin(); c != contourLines1.end(); c++,i++){
@@ -169,6 +170,7 @@ void Aia2::run(string img, string template1, string template2){
 			mc1 = i;
 		}
 	}
+
 	getContourLine(exC2, contourLines2, binThreshold, numOfErosions);
 	for(vector<Mat>::iterator c = contourLines2.begin(); c != contourLines2.end(); c++, i++){
 		if (mSize<c->rows){
