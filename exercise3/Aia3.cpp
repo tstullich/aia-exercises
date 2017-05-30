@@ -50,35 +50,26 @@ vector< vector<Mat> > Aia3::generalHough(Mat& gradImage, vector<Mat>& templ, dou
   return:			the computed template
 */
 vector<Mat> Aia3::makeObjectTemplate(Mat& templateImage, double sigma, double templateThresh){
-  cout << templateImage.type() << endl;
-  // TO DO !!!
   Mat thresholdMat;
-  threshold(templateImage, thresholdMat, templateThresh, 255, THRESH_BINARY_INV);
+  threshold(templateImage, thresholdMat, templateThresh, 255, THRESH_BINARY);
 
-  thresholdMat.convertTo(thresholdMat, CV_32SC1);
-
-  cout << "Test" << endl;
+  thresholdMat.convertTo(thresholdMat, CV_8UC1);
   vector<Mat> objList;
   findContours(thresholdMat, objList, CV_RETR_EXTERNAL, CV_CHAIN_APPROX_NONE);  
-  cout << "Test" << endl;
-  for (auto vec : objList) {
-    cout << vec << endl;
-  }
 
+  // TODO Fix this
   Mat contours = Mat::zeros(templateImage.size(), CV_8UC3);
   for (int i = 0; i < objList.size(); i++) {
-    drawContours(contours, objList, i, Scalar(255, 255, 255) );
+    drawContours(contours, objList, i, Scalar(255, 255));
   }
-  namedWindow("Contours", CV_WINDOW_AUTOSIZE);
-  imshow("Contours", contours);
-  
+
   Mat gradientMat = calcDirectionalGrad(templateImage, sigma);
-  namedWindow("Gradients", CV_WINDOW_AUTOSIZE);
-  imshow("Gradients", gradientMat);
   
   vector<Mat> resultVector;
-  resultVector.push_back(contours);
+  // TODO Convert vector<Mat> into one Mat so that we can add it to resultVector
+ // resultVector.push_back(contours);
   resultVector.push_back(gradientMat);
+
   return resultVector;
 }
 
