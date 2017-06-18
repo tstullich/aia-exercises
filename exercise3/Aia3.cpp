@@ -51,8 +51,26 @@ vector< vector<Mat> > Aia3::generalHough(Mat& gradImage, vector<Mat>& templ, dou
   return:			the computed template
 */
 vector<Mat> Aia3::makeObjectTemplate(Mat& templateImage, double sigma, double templateThresh){
-   // TO DO !!!
-    return vector<Mat>();
+
+    // Get gradient image
+    Mat gradientImage = calcDirectionalGrad(templateImage, sigma);
+    
+    // Get max gradient
+    Mat gradients[2];
+    double maxGradient;
+    split(gradientImage, gradients);
+    cartToPolar(gradients[0], gradients[1], gradients[0], gradients[1]);
+    minMaxLoc(gradients[0], NULL, &maxGradient);
+    
+    // Get binary edge image
+    Mat binaryEdgeImage;
+    threshold(gradients[0], binaryEdgeImage, templateThresh*maxGradient, 1, THRESH_BINARY); 
+
+    // Build result vector
+    vector<Mat> resultVector;
+    resultVector.push_back(binaryEdgeImage);
+    resultVector.push_back(gradientImage);
+    return resultVector;
 }
 
 /* *****************************
