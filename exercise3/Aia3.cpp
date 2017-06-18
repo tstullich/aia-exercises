@@ -24,7 +24,36 @@ void Aia3::plotHough(vector< vector<Mat> >& houghSpace){
   fftMask:	the generated fourier-spectrum of the template (initialized outside of this function)
 */
 void Aia3::makeFFTObjectMask(vector<Mat>& templ, double scale, double angle, Mat& fftMask){
-   // TO DO !!!
+
+    // Element wise multiplication of template binary and gradients
+    Mat twoChannelBinary;
+    Mat twoChannels[] = {templ[0], templ[0]};
+    merge(twoChannels, 2, twoChannelBinary);
+    Mat templateProduct = twoChannelBinary.mul(templ[1]);
+
+    // Rotate and scale
+    Mat rotatedAndScaled = rotateAndScale(templateProduct, angle, scale);
+
+    // Update phase of the gradients
+    Mat temp[2];
+    Mat magnitude, phase;
+    split(rotatedAndScaled, temp);
+    cartToPolar(temp[0], temp[1], magnitude, phase);
+    polarToCart(magnitude, phase-angle, temp[0], temp[1]);
+    merge(temp, 2, rotatedAndScaled);
+
+    // Normalize
+    rotatedAndScaled = rotatedAndScaled/sum(magnitude)[0];
+
+    // Copy to fftMask
+    Mat dst = fftMask(Rect(0, 0, rotatedAndScaled.cols, rotatedAndScaled.rows));
+    rotatedAndScaled.copyTo(dst);
+
+    // Center
+    circShift(fftMask, fftMask, -rotatedAndScaled.cols/2, -rotatedAndScaled.rows/2);
+
+    // Transform fftMask to frequency domain
+    dft(fftMask, fftMask, DFT_COMPLEX_OUTPUT);
 }
 
 // computes the hough space of the general hough transform
@@ -38,8 +67,36 @@ void Aia3::makeFFTObjectMask(vector<Mat>& templ, double scale, double angle, Mat
   return:		the hough space: outer vector over scales, inner vector of angles
 */
 vector< vector<Mat> > Aia3::generalHough(Mat& gradImage, vector<Mat>& templ, double scaleSteps, double* scaleRange, double angleSteps, double* angleRange){
+    
+    // Initialize variables
     vector< vector<Mat> > hough; 
-   // TO DO !!!
+    Mat fftGradImage, fftMask, correlation;   
+    double scale, angle;
+    double scaleStepSize = (scaleRange[1] - scaleRange[0])/(scaleSteps - 1);
+    double angleStepSize = (angleRange[1] - angleRange[0])/(angleSteps - 1);
+
+    // Transform gradients of query image to frequency domain
+    dft(gradImage, fftGradImage, DFT_COMPLEX_OUTPUT);  
+
+    // Iterate over scales and angles
+    for (int i = 0; i < scaleSteps; i++) {
+        scale = scaleRange[0] + i*scaleStepSize;
+        hough.push_back(vector<Mat>());
+        for (int j = 0; j < angleSteps; j++) {
+            angle = angleRange[0] + j*angleStepSize;
+
+            // Get fftMask corresponding to scale and angle
+            fftMask = Mat::zeros(gradImage.rows, gradImage.cols, CV_32FC2);                   
+            makeFFTObjectMask(templ, scale, angle, fftMask);
+
+            // Compute correlation in frequency domain
+            mulSpectrums(fftGradImage, fftMask, correlation, 0, true);
+
+            // Transform correlation to spatial domain and add to hough space
+            dft(correlation, correlation, DFT_REAL_OUTPUT + DFT_INVERSE);
+            hough[i].push_back(correlation);     
+        }    
+    }
     return hough;
 }
 
