@@ -54,6 +54,7 @@ void Aia3::plotHough(vector< vector<Mat> >& houghSpace){
 void Aia3::makeFFTObjectMask(vector<Mat>& templ, double scale, double angle, Mat& fftMask){
 
     // Element wise multiplication of template binary and gradients
+    // converting binary channel to 2C to enable element wise mult with complex gradient already in 2C
     Mat twoChannelBinary;
     Mat twoChannels[] = {templ[0], templ[0]};
     merge(twoChannels, 2, twoChannelBinary);
@@ -74,6 +75,7 @@ void Aia3::makeFFTObjectMask(vector<Mat>& templ, double scale, double angle, Mat
     rotatedAndScaled = rotatedAndScaled/sum(magnitude)[0];
 
     // Copy to fftMask
+    // careful: depending on the scale parameters, sometimes rotatatedAndScaled won't fit into fftMask
     Mat dst = fftMask(Rect(0, 0, rotatedAndScaled.cols, rotatedAndScaled.rows));
     rotatedAndScaled.copyTo(dst);
 
@@ -97,21 +99,7 @@ void Aia3::makeFFTObjectMask(vector<Mat>& templ, double scale, double angle, Mat
 vector< vector<Mat> > Aia3::generalHough(Mat& gradImage, vector<Mat>& templ, double scaleSteps, double* scaleRange, double angleSteps, double* angleRange){
     
     //showImage(gradImage, "qry gradient img", 0); // this leads program to crash... something with channel compatibility
-    
     cout << "qry img type " << gradImage.type() << endl; //type 13, 32FC2
-    Mat gradChannels[2];
-    split(gradImage, gradChannels);
-    cartToPolar(gradChannels[0], gradChannels[1], gradChannels[0], gradChannels[1]);
-    double maxGradientMagn;
-    minMaxLoc(gradChannels[0], NULL, &maxGradientMagn);
-    cout << "max" << maxGradientMagn << endl;
-    
-    showImage(gradChannels[0], "gradChannels[0] before threshold", 0);
-    showImage(gradChannels[1], "gradChannels[1] before threshold", 0);
-    threshold(gradImage, gradImage, 0.5*maxGradientMagn, 0, THRESH_TOZERO); // results in half the template's spectrum...
-    split(gradImage, gradChannels);
-    showImage(gradChannels[0], "gradChannels[0] after threshold", 0);
-    showImage(gradChannels[1], "gradChannels[1] after threshold", 0);
     
     
     // Initialize variables
@@ -135,30 +123,24 @@ vector< vector<Mat> > Aia3::generalHough(Mat& gradImage, vector<Mat>& templ, dou
             angle = angleRange[0] + j*angleStepSize;
 
             // Get fftMask corresponding to scale and angle
-            fftMask = Mat::zeros(gradImage.rows, gradImage.cols, CV_32FC2);                   
+            fftMask = Mat::zeros(gradImage.rows, gradImage.cols, CV_32FC2);
             makeFFTObjectMask(templ, scale, angle, fftMask);
 
-            // ERROR is in the calculation of correlation in the freq domain...
-                // when running money and poker, the correlation output's channels are each all white
             // Compute correlation of both template img and query img, both in frequency domain; hence occurs via multiplication of their spectrums
             mulSpectrums(fftGradImage, fftMask, correlation, 0, true); //conjB = true gets the complex conjugate of the filter spectrum fftmask
-            // wrt moneyTemplate, correlation type 13 (32FC2) size [320 x 192] channels 2
-            Mat correlationChannels[2];
-            split(correlation, correlationChannels);
-            cout << "correlationChannels[0]" << correlationChannels[0].type() << endl; // type 5 32FC1
-            showImage(correlationChannels[0], "correlationChannel[0] after mulSpectrums", 0);
-            showImage(correlationChannels[1], "correlationChannel[1] after mulSpectrums", 0);
+            // correlation type 13 (32FC2)
+            // correlation is 2d bc elem wise mult. also it's NOT correlation b/w 2 imgs; rather correlation b/w img & filter mask -> hence sliding window... correlation calc'd at each pixel. Hence size(correlation) = size(inputimg)
+
             
             // Transform correlation to spatial domain and add to hough space
-            dft(correlation, correlation, DFT_REAL_OUTPUT + DFT_INVERSE);
-            hough[i].push_back(correlation);  // per scale, stacking by rotation
-            cout << "correlation after dft inverse" << correlation.type() << endl; // type 5 32FC1
-            showImage(correlation, "correlation after dft inverse", 0); // when args are money and poker, correlation Mat is completely white
+            dft(correlation, correlation, DFT_REAL_OUTPUT + DFT_INVERSE); // DFT_INVERSE necessary o/w output is C2
+            correlation = abs(correlation);
+            hough[i].push_back(correlation.clone());  // per scale, stacking by rotation
+            // adding a copy vs creating new matrix each time
+            // correlation is type 5, 32FC1
+            //showImage(correlation, "correlation after dft inverse", 0); // when args are money and poker, correlation Mat is completely white (due to parameter issues
         }    
     }
-    
-
-    cout << "size of correlation Mat" << hough.at(0).at(0).size() << endl; // can also do hough[i][j]
     
     return hough;
 }
@@ -214,15 +196,15 @@ void Aia3::run(string tmplImg, string testImg){
     // TO DO !!!
     // ****
 	// Set parameters to reasonable values
-    double objThresh 		= 0;		// relative threshold for maxima in hough space
-    double scaleSteps 		= 1;		// scale resolution in terms of number of scales to be investigated
+    double objThresh 		= 0.7;		// relative threshold for maxima in hough space
+    double scaleSteps 		= 4;		// scale resolution in terms of number of scales to be investigated
     double scaleRange[2];				// scale of angles [min, max]
 	scaleRange[0] 			= 1;
-	scaleRange[1] 			= 1;
-    double angleSteps 		= 1;		// angle resolution in terms of number of angles to be investigated
+	scaleRange[1] 			= 2;
+    double angleSteps 		= 30;		// angle resolution in terms of number of angles to be investigated
     double angleRange[2];				// range of angles [min, max)
     angleRange[0] 			= 0;
-	angleRange[1] 			= 0;
+    angleRange[1] 			= 2*CV_PI;
 	// ****
 	
 	Mat params = (Mat_<float>(1,9) << sigma, templateThresh, objThresh, scaleSteps, scaleRange[0], scaleRange[1], angleSteps, angleRange[0], angleRange[1]);
