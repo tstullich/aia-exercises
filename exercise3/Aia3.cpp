@@ -22,7 +22,7 @@ void Aia3::plotHough(vector< vector<Mat> >& houghSpace){
     int noRotation = (int) houghSpace[0].size();
     
     Mat sumScale = Mat::zeros(houghSpace[0][0].rows, houghSpace[0][0].cols, CV_32FC1);
-    
+    showImage(sumScale, "hough voting space INIT",0);
     
     for (int i=0; i<noScale; i++) {
         Mat sumRotation = Mat::zeros(houghSpace[0][0].rows, houghSpace[0][0].cols, CV_32FC1);
@@ -30,6 +30,7 @@ void Aia3::plotHough(vector< vector<Mat> >& houghSpace){
             add(sumRotation, houghSpace[i][j], sumRotation);
         }
         add(sumScale, sumRotation, sumScale);
+        showImage(sumScale, "hough voting space ITERATION",0);
     }
     showImage(sumScale, "hough voting space ADD",0);
                 
@@ -95,7 +96,7 @@ void Aia3::makeFFTObjectMask(vector<Mat>& templ, double scale, double angle, Mat
 */
 vector< vector<Mat> > Aia3::generalHough(Mat& gradImage, vector<Mat>& templ, double scaleSteps, double* scaleRange, double angleSteps, double* angleRange){
     
-    showImage(gradImage, "qry gradient img", 0);
+    //showImage(gradImage, "qry gradient img", 0); // this leads program to crash... something with channel compatibility
     
     cout << "qry img type " << gradImage.type() << endl; //type 13, 32FC2
     Mat gradChannels[2];
@@ -105,7 +106,13 @@ vector< vector<Mat> > Aia3::generalHough(Mat& gradImage, vector<Mat>& templ, dou
     minMaxLoc(gradChannels[0], NULL, &maxGradientMagn);
     cout << "max" << maxGradientMagn << endl;
     
-    //threshold(gradImage, gradImage, 0.5*maxGradientMagn, 0, THRESH_TOZERO);
+    showImage(gradChannels[0], "gradChannels[0] before threshold", 0);
+    showImage(gradChannels[1], "gradChannels[1] before threshold", 0);
+    threshold(gradImage, gradImage, 0.5*maxGradientMagn, 0, THRESH_TOZERO); // results in half the template's spectrum...
+    split(gradImage, gradChannels);
+    showImage(gradChannels[0], "gradChannels[0] after threshold", 0);
+    showImage(gradChannels[1], "gradChannels[1] after threshold", 0);
+    
     
     // Initialize variables
     vector< vector<Mat> > hough; 
@@ -131,13 +138,22 @@ vector< vector<Mat> > Aia3::generalHough(Mat& gradImage, vector<Mat>& templ, dou
             fftMask = Mat::zeros(gradImage.rows, gradImage.cols, CV_32FC2);                   
             makeFFTObjectMask(templ, scale, angle, fftMask);
 
+            // ERROR is in the calculation of correlation in the freq domain...
+                // when running money and poker, the correlation output's channels are each all white
             // Compute correlation of both template img and query img, both in frequency domain; hence occurs via multiplication of their spectrums
-            mulSpectrums(fftGradImage, fftMask, correlation, 0, true);
-
+            mulSpectrums(fftGradImage, fftMask, correlation, 0, true); //conjB = true gets the complex conjugate of the filter spectrum fftmask
+            // wrt moneyTemplate, correlation type 13 (32FC2) size [320 x 192] channels 2
+            Mat correlationChannels[2];
+            split(correlation, correlationChannels);
+            cout << "correlationChannels[0]" << correlationChannels[0].type() << endl; // type 5 32FC1
+            showImage(correlationChannels[0], "correlationChannel[0] after mulSpectrums", 0);
+            showImage(correlationChannels[1], "correlationChannel[1] after mulSpectrums", 0);
+            
             // Transform correlation to spatial domain and add to hough space
             dft(correlation, correlation, DFT_REAL_OUTPUT + DFT_INVERSE);
             hough[i].push_back(correlation);  // per scale, stacking by rotation
-
+            cout << "correlation after dft inverse" << correlation.type() << endl; // type 5 32FC1
+            showImage(correlation, "correlation after dft inverse", 0); // when args are money and poker, correlation Mat is completely white
         }    
     }
     
