@@ -18,7 +18,7 @@ k			number of applications of the erosion operator
 void Aia2::getContourLine(const Mat& img, vector<Mat>& objList, int thresh, int k){
   Mat dst;
   threshold(img, dst, thresh, 255, THRESH_BINARY_INV);
-  erode(dst, dst, Mat(), Point(-1,-1), k);
+  erode(dst, dst, Mat(), Point(-1, -1), k);
   findContours(dst, objList, CV_RETR_EXTERNAL, CV_CHAIN_APPROX_NONE);  
 }
 
@@ -42,7 +42,7 @@ out		the normalized fourier descriptor
 */
 Mat Aia2::normFD(const Mat& fd, int n){
   Mat fdc = fd.clone();
-
+  
   //plotFD(fdc, "fd not normalized", 0);
   
   // translation invariance: set F[0] to zero
@@ -51,8 +51,17 @@ Mat Aia2::normFD(const Mat& fd, int n){
   
   // scale invariance: divide by magnitude of F[1]
   // TODO: magnitude of F[1] is zero (and magnitude of F[1] is zero or almost zero))
-  float mag_f1 = sqrt(pow(fdc.at<Vec2f>(1)[0],2) + pow(fdc.at<Vec2f>(1)[1],2)); 
-  fdc /= mag_f1;
+  float mag_chosen;
+  int lastindex = fdc.rows-1;
+  float mag_f1 = sqrt(pow(fdc.at<Vec2f>(1)[0],2) + pow(fdc.at<Vec2f>(1)[1],2));
+  float mag_f1_neg = sqrt(pow(fdc.at<Vec2f>(lastindex)[0],2) + pow(fdc.at<Vec2f>(lastindex)[1],2));
+  if (mag_f1 > mag_f1_neg) {
+      mag_chosen = mag_f1;;
+  }
+  else {
+    mag_chosen = mag_f1_neg;
+  }
+  fdc /= mag_chosen;
   //plotFD(fdc, "fd translation and scale invariant", 0);
   
   // rotation invariance: set F[i] := magnitude(F[i])
@@ -65,9 +74,8 @@ Mat Aia2::normFD(const Mat& fd, int n){
   // wrt negative/positive/frequency: the corresponding angles are in planes[1]
   // I just used a blur filter to try and remove higher frequencies
   Mat nfd;
-  cv::blur(planes[0], planes[0], Point(4,4));
-  nfd = planes[0](Rect(0, 0, 1, n));
   //plotFD(nfd, "fd translation, scale, and rotation invariant, smaller sensitivity", 0);
+  vconcat(planes[0](Rect(0, 0, 1, n/2)), planes[0](Rect(0,planes[0].rows-n/2,1,n/2)), nfd);
 
   return nfd;
 }
@@ -160,8 +168,8 @@ void Aia2::run(string img, string template1, string template2){
 	vector<Mat> contourLines2;
 	// TO DO !!!
 	// --> Adjust threshold and number of erosion operations
-	binThreshold = 110;
-	numOfErosions = 2;
+	binThreshold = 155;
+	numOfErosions = 6;
 	getContourLine(exC1, contourLines1, binThreshold, numOfErosions);
 	int mSize = 0, mc1 = 0, mc2 = 0, i = 0;
 	for(vector<Mat>::iterator c = contourLines1.begin(); c != contourLines1.end(); c++,i++){
@@ -201,7 +209,7 @@ void Aia2::run(string img, string template1, string template2){
 	// TO DO !!!
 	// --> Adjust threshold and number of erosion operations
 	binThreshold = 130;
-	numOfErosions = 2;
+	numOfErosions = 4;
 	getContourLine(query, contourLines, binThreshold, numOfErosions);
 	
 	cout << "Found " << contourLines.size() << " object candidates" << endl;
