@@ -16,7 +16,20 @@ return: 	the log-likelihood log(p(x_i|y_i=j))
 */
 Mat Aia5::calcCompLogL(vector<struct comp*>& model, Mat& features){
 	// To Do !!!
-	return Mat();
+  Mat result = Mat::zeros(model.size(), features.cols, CV_32FC1);
+  for (int i = 0; i < model.size(); i++) {
+    for (int j = 0; j < features.cols; j++) {
+      Mat invertDst;
+      invert(model.at(i)->covar, invertDst);
+      Mat transposeDst;
+      transpose(features.at<float>(j) - model.at(i)->mean, transposeDst);
+      Mat probability = -0.5 * log(determinant(model.at(i)->covar))
+                        - 0.5 * transposeDst
+                        * invertDst * (features.at<float>(j) - model.at(i)->mean);
+      result.at<float>(i, j) = probability.at<float>(0, 0);
+    }
+  }
+	return result;
 }
 
 // Computes the log-likelihood of each feature by combining the likelihoods in all model components.
@@ -26,8 +39,20 @@ features:  matrix of feature vectors
 return:	   the log-likelihood of feature number i in the mixture model (the log of the summation of alpha_j p(x_i|y_i=j) over j)
 */
 Mat Aia5::calcMixtureLogL(vector<struct comp*>& model, Mat& features){
-	// To Do !!!
-	return Mat();
+  cout << "Mean: " << model.at(0)->mean.size() << endl;
+  cout << "Model: " << model.size() << endl;
+  cout << "Features " << features.size() << endl;
+  Mat result = calcCompLogL(model, features);
+  cout << "Result: " << result.size() << endl;
+  Mat resultVec = Mat::zeros(features.cols, 1, CV_32FC1);
+  for (int i = 0; i < result.cols; i++) {
+    float val = 0;
+    for (int j = 0; j < model.size(); j++) {
+      val += log(result.at<float>(j, i) * model.at(j)->weight);
+    }
+    resultVec.at<float>(i) = val;
+  }
+	return resultVec;
 }
 
 // Computes the posterior over components (the degree of component membership) for each feature.
