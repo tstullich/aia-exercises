@@ -15,21 +15,21 @@ features:  	matrix of feature vectors
 return: 	the log-likelihood log(p(x_i|y_i=j))
 */
 Mat Aia5::calcCompLogL(vector<struct comp*>& model, Mat& features){
-	// To Do !!!
   Mat result = Mat::zeros(model.size(), features.cols, CV_32FC1);
+
   for (int i = 0; i < model.size(); i++) {
     for (int j = 0; j < features.cols; j++) {
       Mat invertDst;
       invert(model.at(i)->covar, invertDst);
       Mat transposeDst;
-      transpose(features.at<float>(j) - model.at(i)->mean, transposeDst);
+      transpose(features.col(j) - model.at(i)->mean, transposeDst);
       Mat probability = -0.5 * log(determinant(model.at(i)->covar))
-                        - 0.5 * transposeDst
-                        * invertDst * (features.at<float>(j) - model.at(i)->mean);
+                        - 0.5 * transposeDst * invertDst * (features.col(j) - model.at(i)->mean);
       result.at<float>(i, j) = probability.at<float>(0, 0);
     }
   }
-	return result;
+
+  return result;
 }
 
 // Computes the log-likelihood of each feature by combining the likelihoods in all model components.
@@ -39,20 +39,18 @@ features:  matrix of feature vectors
 return:	   the log-likelihood of feature number i in the mixture model (the log of the summation of alpha_j p(x_i|y_i=j) over j)
 */
 Mat Aia5::calcMixtureLogL(vector<struct comp*>& model, Mat& features){
-  cout << "Mean: " << model.at(0)->mean.size() << endl;
-  cout << "Model: " << model.size() << endl;
-  cout << "Features " << features.size() << endl;
-  Mat result = calcCompLogL(model, features);
-  cout << "Result: " << result.size() << endl;
-  Mat resultVec = Mat::zeros(features.cols, 1, CV_32FC1);
-  for (int i = 0; i < result.cols; i++) {
+  Mat result = Mat::zeros(features.cols, 1, CV_32FC1);
+  Mat compLogL = calcCompLogL(model, features);
+
+  for (int i = 0; i < features.cols; i++) {
     float val = 0;
     for (int j = 0; j < model.size(); j++) {
-      val += log(result.at<float>(j, i) * model.at(j)->weight);
+      val += exp(compLogL.at<float>(j, i)) * model.at(j)->weight;
     }
-    resultVec.at<float>(i) = val;
+    result.at<float>(i) = log(val);
   }
-	return resultVec;
+
+  return result;
 }
 
 // Computes the posterior over components (the degree of component membership) for each feature.
@@ -62,8 +60,17 @@ features:  	matrix of feature vectors
 return:		the posterior p(y_i=j|x_i)
 */
 Mat Aia5::gmmEStep(vector<struct comp*>& model, Mat& features){
-	// To Do !!!
-	return Mat();
+  Mat result = Mat::zeros(model.size(), features.cols, CV_32FC1);
+  Mat compLogL = calcCompLogL(model, features);
+  Mat mixtureLogL = calcMixtureLogL(model, features);
+  
+  for (int i = 0; i < model.size(); i++) {
+    for (int j = 0; j < features.cols; j++) {
+      result.at<float>(i, j) = exp(log(model.at(i)->weight) + compLogL.at<float>(i, j) - mixtureLogL.at<float>(j));
+    }
+  }
+  
+  return result;
 }
 
 // Updates a given model on the basis of posteriors previously computed in the E-Step.
@@ -74,7 +81,30 @@ features:  matrix of feature vectors
 posterior: the posterior p(y_i=j|x_i)
 */
 void Aia5::gmmMStep(vector<struct comp*>& model, Mat& features, Mat& posterior){
-   // To Do !!!
+  Mat N;
+  reduce(posterior, N, 1, CV_REDUCE_SUM);
+  int N_x = features.cols;
+
+  for (int j = 0; j < model.size(); j++) {
+    // Compute new weight alpha
+    model.at(j)->weight = N.at<float>(j)/N_x;
+
+    // Compute new mean mu
+    Mat mu = Mat::zeros(features.rows, 1, CV_32FC1);
+    for (int i = 0; i < N_x; i++) {
+        mu += features.col(i)*posterior.at<float>(j, i);
+    }
+    model.at(j)->mean = mu/N.at<float>(j);
+
+    // Compute new covariance matrix sigma
+    Mat sigma = Mat::zeros(features.rows, features.rows, CV_32FC1);
+    for (int i = 0; i < N_x; i++) {
+      Mat dst;
+      mulTransposed(features.col(i) - model.at(j)->mean, dst, false);
+      sigma += dst*posterior.at<float>(j, i);
+    }
+    model.at(j)->covar = sigma/N.at<float>(j);
+  }
 }
 
 /* *****************************
@@ -270,7 +300,7 @@ void Aia5::trainGMM(Mat& data, int numberOfComponents, vector<struct comp*>& mod
 
 			// M-Step (updates model parameters)
 			gmmMStep(model, data, posterior);
-			
+
 			// update the current p(X|Omega)
 			dataLogL[1] = dataLogL[0];
 			mixLogL = calcMixtureLogL(model, data);
@@ -394,7 +424,6 @@ void Aia5::plotGMM(vector<struct comp*>& model, Mat& features){
 		// draw components
 		circle(plot,  Point( (model.at(i)->mean.at<float>(1,0)-min_y)*scale, (model.at(i)->mean.at<float>(0,0)-min_x)*scale ), 3, Scalar(255,0,0), 2);
 		ellipse(plot, Point( (model.at(i)->mean.at<float>(1,0)-min_y)*scale, (model.at(i)->mean.at<float>(0,0)-min_x)*scale ), Size(sqrt(EVal.at<float>(1))*scale*2, sqrt(EVal.at<float>(0))*scale*2), rAng*180/CV_PI, 0, 360, Scalar(255,0,0), 2);
-
     }
     
     // show plot an abd wait for key

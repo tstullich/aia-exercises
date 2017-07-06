@@ -23,7 +23,7 @@ int main(int argc, char** argv) {
 
 	// start simple clustering
    aia.test();
-	
+
 	// start processing
    aia.run();
 	
