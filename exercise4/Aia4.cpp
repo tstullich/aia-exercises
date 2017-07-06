@@ -6,7 +6,18 @@
 // Description : 
 //============================================================================
 
+#include <limits>
 #include "Aia4.h"
+
+float findLogShiftMax(Mat &m ) {
+  float result = -numeric_limits<float>::infinity();
+  for (int i = 0; i < m.rows; i++) {
+    for (int j = 0; j < m.cols; j++) {
+      result = max(result, m.at<float>(i, j));
+    }
+  }
+  return result;
+}
 
 // Computes the log-likelihood of each feature vector in every component of the supplied mixture model.
 /*
@@ -26,6 +37,14 @@ Mat Aia5::calcCompLogL(vector<struct comp*>& model, Mat& features){
       Mat probability = -0.5 * log(determinant(model.at(i)->covar))
                         - 0.5 * transposeDst * invertDst * (features.col(j) - model.at(i)->mean);
       result.at<float>(i, j) = probability.at<float>(0, 0);
+    }
+  }
+
+  float maxLogShift = findLogShiftMax(result);
+  for (int i = 0; i < result.rows; i++) {
+    for (int j = 0; j < result.cols; j++) {
+      float logShifted = maxLogShift + log(exp(result.at<float>(i, j) - maxLogShift));
+      result.at<float>(i, j) = logShifted;
     }
   }
 
@@ -118,7 +137,7 @@ void Aia5::run(void){
 
 	// To Do: Adjust number of princ. comp. and number of clusters and evaluate performance
 	// dimensionality of the generated feature vectors (number of principal components)
-    int vectLen = 20;
+    int vectLen = 9;
     // number of components (clusters) to be used by the model
     int numberOfComponents = 10;
     
